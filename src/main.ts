@@ -14,7 +14,11 @@ async function bootstrap() {
     app.useGlobalFilters();
     
     // Enable CORS
-    app.enableCors();
+    app.enableCors({
+      origin: ['https://toly-six.vercel.app'], // Your Vercel frontend URL
+      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+      credentials: true,
+    });
 
     // Start the application
     const port = process.env.PORT || 3000;
