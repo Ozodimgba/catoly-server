@@ -1,6 +1,8 @@
 import Redis from 'ioredis';
 
-export const redis = new Redis(process.env.REDIS);
+const connect = `redis://default:6SYeR1ZTN6kzP91zAceIYal1g1QulZVi@redis-13395.c341.af-south-1-1.ec2.redns.redis-cloud.com:13395`
+export const redis = new Redis(connect);
+// export const redis = new Redis(process.env.REDIS);
 
 // Connection event handlers
 redis.on('connect', () => {
