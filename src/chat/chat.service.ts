@@ -1,6 +1,7 @@
 // src/chat/chat.service.ts
 import {
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -26,6 +27,7 @@ import { ChatEvent } from './chat.type';
 
 @Injectable()
 export class ChatService {
+  logger = new Logger(ChatService.name)
   constructor(
     @InjectModel(Conversation.name)
     private conversationModel: Model<ConversationDocument>,
