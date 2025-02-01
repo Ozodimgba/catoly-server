@@ -1147,6 +1147,7 @@ export class ActionsService {
         token: data.token,
         tokenExtensions: data.tokenExtensions,
         tokenMeta: data.tokenMeta,
+        image: data.image,
         holderSummary: holderSummaryReport,
         freezeAuthority: data.freezeAuthority,
         mintAuthority: data.mintAuthority,

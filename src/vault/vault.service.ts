@@ -160,11 +160,14 @@ export class VaultService implements OnModuleInit {
         };
       }
 
-      const privateKey = bs58.encode(Keypair.generate().secretKey);
+      const inAppWallet = Keypair.generate();
+
+      const privateKey = bs58.encode(inAppWallet.secretKey);
       const { key, iv, encrypted } = this.AESEcnrypt(privateKey);
 
       const timestamp = new Date().toISOString();
       const walletData = {
+        publicKey: inAppWallet.publicKey.toBase58(),
         encryptedPkey: encrypted,
         createdAt: timestamp,
       };

@@ -301,6 +301,7 @@ export interface ITokenData {
   token: IMintAccount;
   tokenExtensions: null;
   tokenMeta: ITokenMeta;
+  image: string;
   holderSummary: {
     percentageOfTopHolders: number;
     holderSummary: ISummary;

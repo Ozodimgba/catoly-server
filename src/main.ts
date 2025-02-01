@@ -22,8 +22,8 @@ async function bootstrap() {
         'http://localhost:3000',
         'https://toly-lemon.vercel.app',
         'https://toly-two.vercel.app',
-        'https://3000-mctursh-toly-yu82cgs694m.ws-eu117.gitpod.io',
-        'https://www.catoly.ai'
+        'https://3000-mctursh-toly-fvhlbgfqn7g.ws-eu117.gitpod.io',
+        'https://www.catoly.ai',
       ],
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       allowedHeaders: '*',

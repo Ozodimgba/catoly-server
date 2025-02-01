@@ -36,14 +36,15 @@ export class ChatController {
   constructor(private chatService: ChatService) {}
 
   @Post('create-conversations')
-  async createConversation(
-    @Req() request: Request
-  ) {
-    const user = request['user']
+  async createConversation(@Req() request: Request) {
+    const user = request['user'];
     try {
       // const randomUserId = `user_${Math.floor(Math.random() * 1000000)}`;
-      const data =  await this.chatService.createConversation(user.id);
-      return { message: "Successfully Created conversation", data: data.toObject() }
+      const data = await this.chatService.createConversation(user.id);
+      return {
+        message: 'Successfully Created conversation',
+        data: data.toObject(),
+      };
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to create conversation',
@@ -60,9 +61,9 @@ export class ChatController {
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
     try {
-      const user = request['user']
+      const user = request['user'];
       console.log(user);
-      
+
       return await this.chatService.getConversations(user.id, page, limit);
     } catch (error) {
       throw new HttpException(
@@ -79,10 +80,10 @@ export class ChatController {
     @Param('conversationId') conversationId: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-  ){
-  // : Promise<Message[]> {
+  ) {
+    // : Promise<Message[]> {
     try {
-      const user = request['user']
+      const user = request['user'];
       return await this.chatService.getConversation(
         user.id,
         conversationId,
@@ -145,58 +146,56 @@ export class ChatController {
     @Query('conversationId') conversation: string,
     @Query('threadId') threadId: string,
     @Res() response: ExpressResponse,
-    @Req() request: Request
+    @Req() request: Request,
   ): Promise<any> {
     response.setHeader('Content-Type', 'text/event-stream');
     response.setHeader('Cache-Control', 'no-cache');
     response.setHeader('Connection', 'keep-alive');
-    let AIResponse = ''
-    
+    let AIResponse = '';
+
     const user = request['user'];
 
     let newConversation: Conversation;
-    let newThreadId: number = Number(threadId)
-    let newConversationId: string = conversation
+    let newThreadId: number = Number(threadId);
+    let newConversationId: string = conversation;
 
-    if(!conversation){
-      newConversation = await this.chatService.createConversation(user.id)
-      newThreadId = newConversation.threadId
-      newConversationId = newConversation['_id']
+    if (!conversation) {
+      newConversation = await this.chatService.createConversation(user.id);
+      newThreadId = newConversation.threadId;
+      newConversationId = newConversation['_id'];
     }
 
     const chatPayload: AddMessageProps = {
       content: question,
       role: 'user',
       conversation: newConversationId,
-      userId: user.id
-    }
+      userId: user.id,
+    };
 
-    await this.chatService.addMessage(chatPayload)
-    
+    await this.chatService.addMessage(chatPayload);
 
     this.chatService.getStreamingAIResponse(question, newThreadId).subscribe({
       next: (chunk) => {
-        AIResponse += chunk
+        AIResponse += chunk;
         response.write(chunk);
       },
       error: (error) => {
         response.end();
       },
       complete: async () => {
-        if(AIResponse){
+        if (AIResponse) {
           response.end(async () => {
             await this.chatService.addMessage({
               content: AIResponse,
               role: 'assistant',
               conversation: newConversationId,
-              userId: user.id
-            })
+              userId: user.id,
+            });
           });
         } else {
           // Alert the failure of the  Model
-          console.warn("Content didn't return content")
+          console.warn("Content didn't return content");
         }
-
       },
     });
   }

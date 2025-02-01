@@ -17,7 +17,11 @@ import { catchError, firstValueFrom, map, Observable } from 'rxjs';
 import axios, { AxiosResponse } from 'axios';
 import { User } from 'src/user/schema/user.schema';
 import { AddMessageProps } from './chat.dto';
-import { Message, MessageDocument, MessageType } from './schemas/message.schema';
+import {
+  Message,
+  MessageDocument,
+  MessageType,
+} from './schemas/message.schema';
 import { ObjectId } from 'typeorm';
 import { ChatEvent } from './chat.type';
 
@@ -25,7 +29,8 @@ import { ChatEvent } from './chat.type';
 export class ChatService {
   logger = new Logger(ChatService.name)
   constructor(
-    @InjectModel(Conversation.name) private conversationModel: Model<ConversationDocument>,
+    @InjectModel(Conversation.name)
+    private conversationModel: Model<ConversationDocument>,
     @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(AIThread.name) private aiThreadModel: Model<AIThread>,
@@ -47,7 +52,7 @@ export class ChatService {
 
       await conversation.save();
       // await session.commitTransaction()
-      return conversation
+      return conversation;
     } catch (error) {
       throw new Error(`Failed to create conversation: ${error.message}`);
     }
@@ -84,19 +89,19 @@ export class ChatService {
         // .find({ conversation: conversationId, userId })
         // .find({ userId,  })
         .find({ conversation: conversationId, userId })
-        .sort({ createdAt: "asc" })
+        .sort({ createdAt: 'asc' })
         .skip((page - 1) * limit)
         .limit(limit)
         .populate('userId')
         .exec();
-  
+
       if (!conversationId) {
         throw new NotFoundException('Conversation not found');
       }
-  
+
       // Calculate skip for pagination
       // const skip = (page - 1) * limit;
-  
+
       // Get paginated messages
       // const messages = conversation.messages
       //   .slice(skip, skip + limit)
@@ -104,27 +109,20 @@ export class ChatService {
       //     (a, b) =>
       //       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
       //   );
-  
+
       return {
         // ...conversation.toObject(),
-        message: "Successfully fetched messages",
+        message: 'Successfully fetched messages',
         messages,
         // hasMore: skip + limit < conversation.messages.length,
         // total: conversation.messages.length,
       };
-      
     } catch (error) {
-      throw error
+      throw error;
     }
   }
 
-  async addMessage({
-      content,
-      role,
-      conversation, 
-      userId
-    }: AddMessageProps
-  ) {
+  async addMessage({ content, role, conversation, userId }: AddMessageProps) {
     // const message = {
     //   content,
     //   role,
@@ -137,7 +135,7 @@ export class ChatService {
       conversation,
       content: content,
       type: MessageType.TEXT,
-      role
+      role,
     });
 
     // const updatedConversation = await this.conversationModel.findOneAndUpdate(
@@ -152,18 +150,15 @@ export class ChatService {
     //   { new: true },
     // );
 
-    const convo = await this.conversationModel.findByIdAndUpdate(
-      conversation,
-      { 
-        lastMessage: message._id,
-      }
-    );
+    const convo = await this.conversationModel.findByIdAndUpdate(conversation, {
+      lastMessage: message._id,
+    });
 
     if (!convo) {
       throw new NotFoundException('Conversation not found');
     }
 
-    await message.save()
+    await message.save();
 
     return convo;
   }
@@ -187,24 +182,23 @@ export class ChatService {
 
   async getNewThreadId(): Promise<AIThread> {
     try {
-      const thread = await this.aiThreadModel.find({ name: 'default' })
+      const thread = await this.aiThreadModel.find({ name: 'default' });
       let newThread;
-      if(!thread.length){
-        newThread = new this.aiThreadModel({ threadCount: 1, name: 'default' })
-        return await newThread.save()
+      if (!thread.length) {
+        newThread = new this.aiThreadModel({ threadCount: 1, name: 'default' });
+        return await newThread.save();
       }
-  
+
       newThread = await this.aiThreadModel.findOneAndUpdate(
-        {name: 'default'},
+        { name: 'default' },
         { $inc: { threadCount: 1 } },
-        { new: true }
-      )
-  
-      return await newThread.save()
+        { new: true },
+      );
+
+      return await newThread.save();
       // await session.commitTransaction();
-      
     } catch (error) {
-      throw error
+      throw error;
     }
   }
 
@@ -336,30 +330,52 @@ export class ChatService {
           response.data.on('data', (chunk: Buffer) => {
             try {
               const text = chunk.toString('utf-8');
+              const lines = text.split('\n');
 
-              const jsonStr = text.slice(6);
+              for (const line of lines) {
+                // Handle tool data
+                if (line.startsWith('Tool :')) {
+                  try {
+                    const jsonStr = line.substring(6).trim();
+                    const toolData = JSON.parse(jsonStr);
+                    // Send tool data as SSE format
+                    console.log(toolData);
 
-              try {
-                const {
-                  event,
-                  data,
-                  metadata: { langgraph_node },
-                } = JSON.parse(jsonStr) as ChatEvent;
-                if (
-                  // text.startsWith('data: ') &&
-                  data?.chunk?.content &&
-                  event === 'on_chat_model_stream' &&
-                  langgraph_node
-                ) {
-                  const text = data.chunk?.content;
-                  streamdContent += text;
-                  subscriber.next(text);
+                    subscriber.next(
+                      `data: ${JSON.stringify({
+                        type: 'tool',
+                        payload: toolData,
+                      })}\n\n`,
+                    );
+                  } catch (error) {
+                    console.log('Tool parsing error:', error);
+                  }
                 }
-              } catch(error) {
-                this.logger.log({error}, "Failed to parse stream")
+                // Handle chat content
+                else if (line.startsWith('Toly :')) {
+                  try {
+                    const jsonStr = line.substring(6).trim();
+                    const {
+                      event,
+                      data,
+                      metadata: { langgraph_node },
+                    } = JSON.parse(jsonStr);
+
+                    if (event === 'on_chat_model_stream' && langgraph_node) {
+                      const content = data.chunk?.content;
+                      if (content) {
+                        console.log(content);
+                        // Stream chat content in original format
+                        subscriber.next(`data: ${content}\n\n`);
+                      }
+                    }
+                  } catch (error) {
+                    console.log('Event parsing error:', error);
+                  }
+                }
               }
             } catch (error) {
-              console.error('Error processing chunk:', error);
+              console.error('Stream processing error:', error);
             }
           });
 
