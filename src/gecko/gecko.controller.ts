@@ -1,6 +1,17 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { GeckoService } from './gecko.service';
-import { GeckoDexResponse, PoolResponse, SimplifiedPool, TopTrader } from './gecko.types';
+import {
+  GeckoDexResponse,
+  PoolResponse,
+  SimplifiedPool,
+  TopTrader,
+} from './gecko.types';
 import { HttpService } from '@nestjs/axios';
 
 @Controller('gecko')
@@ -76,6 +87,21 @@ export class GeckoController {
       time,
       limit,
       offset,
+    });
+  }
+
+  @Get('wallet-pnl/:wallet')
+  getWalletPnl(
+    @Param('wallet') wallet: string,
+    @Query('time') time: string = '24h',
+  ) {
+    if (!wallet) {
+      throw new BadRequestException('Wallet address is required');
+    }
+
+    return this.geckoService.getWalletPnl({
+      time,
+      wallet,
     });
   }
 

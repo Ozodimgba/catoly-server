@@ -11,6 +11,8 @@ import {
   TopTraderParams,
   TradesResponse,
   WalletData,
+  WalletPnlData,
+  WalletPnlParams,
 } from './gecko.types';
 import axios from 'axios';
 import { DasService } from 'src/das/das.service';
@@ -20,7 +22,7 @@ import { ConfigService } from '@nestjs/config';
 export class GeckoService {
   private readonly baseUrl = 'https://api.geckoterminal.com/api/v2';
   private readonly dexscreener = 'https://api.dexscreener.com/latest/dex';
-  private readonly astralane = 'https://graphql.astralane.io/api/v1/dataset';
+  private readonly astralane = 'https://graphql.astralane.io/api/v1';
   private readonly astralaneKey: string;
 
   constructor(
@@ -69,7 +71,7 @@ export class GeckoService {
       });
 
       const response = await fetch(
-        `${this.astralane}/profitable-wallets?${queryParams}`,
+        `${this.astralane}/dataset/profitable-wallets?${queryParams}`,
         {
           method: 'GET',
           headers: {
@@ -103,7 +105,7 @@ export class GeckoService {
       });
 
       const response = await fetch(
-        `${this.astralane}/top-traders?${queryParams}`,
+        `${this.astralane}/dataset/top-traders?${queryParams}`,
         {
           method: 'GET',
           headers: {
@@ -122,6 +124,43 @@ export class GeckoService {
     } catch (error) {
       console.error('Error fetching top traders:', error);
       throw new Error(`Failed to fetch top traders: ${error.message}`);
+    }
+  }
+
+  async getWalletPnl(params: WalletPnlParams): Promise<WalletPnlData> {
+    const { time = '24h', wallet } = params;
+
+    // Ensure wallet address is provided
+    if (!wallet) {
+      throw new Error('Wallet address is required');
+    }
+
+    try {
+      const queryParams = new URLSearchParams({
+        time: time.toString(),
+        wallet: wallet.toString(),
+      });
+
+      const response = await fetch(
+        `${this.astralane}/dataset/wallet-pnl?${queryParams}`,
+        {
+          method: 'GET',
+          headers: {
+            'x-api-key': this.astralaneKey,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data as WalletPnlData;
+    } catch (error) {
+      console.error('Error fetching wallet PNL:', error);
+      throw error;
     }
   }
 

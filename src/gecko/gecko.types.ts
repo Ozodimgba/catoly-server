@@ -239,3 +239,28 @@ export interface TopTrader {
   volume_buy: number;
   volume_sell: number;
 }
+
+export interface TopTradersParams {
+  token?: string;
+  time?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface TraderData {
+  address: string;
+  profit: number;
+  trades: number;
+}
+
+export interface WalletPnlParams {
+  time?: string;
+  wallet: string;
+}
+
+export interface WalletPnlData {
+  wallet: string;
+  totalPnl: number;
+  dailyPnl: number[];
+  timestamps: string[];
+}
