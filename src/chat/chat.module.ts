@@ -13,6 +13,7 @@ import { AuthModule } from '../auth/auth.module';
 import { HttpModule } from '@nestjs/axios';
 import { User, UserSchema } from 'src/user/schema/user.schema';
 import { Message, MessageSchema } from './schemas/message.schema';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
@@ -23,7 +24,8 @@ import { Message, MessageSchema } from './schemas/message.schema';
       { name: AIThread.name, schema: AIThreadSchema }
     ]),
     AuthModule,
-    HttpModule
+    HttpModule,
+    ConfigModule
   ],
   controllers: [ChatController],
   providers: [ChatService],

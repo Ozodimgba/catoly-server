@@ -24,6 +24,7 @@ import {
 } from './schemas/message.schema';
 import { ObjectId } from 'typeorm';
 import { ChatEvent } from './chat.type';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ChatService {
@@ -34,6 +35,7 @@ export class ChatService {
     @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(AIThread.name) private aiThreadModel: Model<AIThread>,
+    private configService: ConfigService,
 
     private readonly httpService: HttpService,
   ) {}
@@ -277,6 +279,8 @@ export class ChatService {
       const response = await firstValueFrom(
         this.httpService
           .post(
+            // 'https://chat.catoly.ai/agent/agent',
+            // 'https://catolyai-app-6tqpm.ondigitalocean.app/agent',
             'http://52.26.233.41/agent',
             {
               // const response = this.httpService.post('http://52.26.233.41/agent', {
@@ -312,11 +316,12 @@ export class ChatService {
   getStreamingAIResponse(question: string, thread_id: number): Observable<any> {
     return new Observable((subscriber) => {
       let streamdContent = '';
+      const AiBaseUrl = this.configService.get<string>('AI_AGENT_BASEURL')
 
       this.httpService
         .axiosRef({
           method: 'POST',
-          url: 'https://chat.catoly.ai/agent',
+          url: `${AiBaseUrl}/agent`,
           data: {
             question,
             thread_id: thread_id,
