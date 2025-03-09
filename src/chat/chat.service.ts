@@ -312,112 +312,195 @@ export class ChatService {
       throw new Error(`Failed to get AI response: ${error.message}`);
     }
   }
-
+  
   getStreamingAIResponse(question: string, thread_id: number): Observable<any> {
     return new Observable((subscriber) => {
-      let streamdContent = '';
-      const AiBaseUrl = this.configService.get<string>('AI_AGENT_BASEURL')
+      let streamedContent = "";
+      const AiBaseUrl = this.configService.get<string>('AI_AGENT_BASEURL');
+      
+      // Complete buffer for reconstructing split messages
+      let rawBuffer = "";
+
+      const processedTools = new Set<string>();
+  
+      const MESSAGE_TYPES = {
+        TOOL: 'Tool :',
+        TOLY: 'Toly :'
+      };
+      
+      const IDENTIFIER_LENGTH = 6; // Both identifiers are 6 chars long
+      
+      const findNextMessageStart = (currentPos: number): number => {
+        let nextPos = Infinity;
+        
+        Object.values(MESSAGE_TYPES).forEach(identifier => {
+          const pos = rawBuffer.indexOf(identifier, currentPos + IDENTIFIER_LENGTH);
+          if (pos >= 0 && pos < nextPos) {
+            nextPos = pos;
+          }
+        });
+        
+        return nextPos;
+      };
+      
+      // Extract message content from the buffer
+      const extractMessageContent = (startPos: number): { content: string, nextMsgStart: number } => {
+        const nextMsgStart = findNextMessageStart(startPos);
+        
+        const content = nextMsgStart !== Infinity 
+          ? rawBuffer.substring(startPos + IDENTIFIER_LENGTH, nextMsgStart)
+          : rawBuffer.substring(startPos + IDENTIFIER_LENGTH);
+          
+        return { content, nextMsgStart };
+      };
+      
+      const processToolMessage = (content: string, isEnd: boolean): boolean => {
+        try {
+          const jsonStr = content.trim();
+          const toolData = JSON.parse(jsonStr);
+          
+          // Create a unique key for this tool to prevent duplicates
+          const toolKey = `${toolData.tool_name}-${JSON.stringify(toolData.additional_kwargs)}`;
+          
+          if (!processedTools.has(toolKey)) {
+            processedTools.add(toolKey);
+            subscriber.next(
+              `data: ${JSON.stringify({
+                type: 'tool',
+                payload: toolData,
+              })}\n\n`,
+            );
+          }
+          return true;
+        } catch (error) {
+          if (isEnd) {
+            this.logger.error('Failed to parse tool message at end:', error);
+            return true; // Consider processed if we're at the end
+          }
+          return false; // Not processed, might be incomplete
+        }
+      };
+      
+      const processTolyMessage = (content: string, isEnd: boolean): boolean => {
+        try {
+          const parsedData = JSON.parse(content);
+          
+          if (parsedData.event === 'on_chat_model_stream' && 
+              parsedData.metadata?.langgraph_node === 'Toly') {
+            
+            const msgContent = parsedData.data.chunk?.content;
+            
+            if (msgContent) {
+              streamedContent += msgContent;
+              subscriber.next(`data: ${msgContent}\n\n`);
+            }
+          }
+          return true;
+        } catch (error) {
+          if (isEnd) {
+            this.logger.error('Failed to parse Toly message at end:', error, { content });
+            return true; // Consider processed if we're at the end
+          }
+          return false; // Not processed, might be incomplete
+        }
+      };
+      
+      const processMessages = (
+        identifier: string, 
+        processor: (content: string, isEnd: boolean) => boolean, 
+        isEnd = false
+      ) => {
+        while (true) {
+          const msgStart = rawBuffer.indexOf(identifier);
+          if (msgStart === -1) break; // No more messages of this type
+          
+          const { content, nextMsgStart } = extractMessageContent(msgStart);
+          
+          // If we don't have a complete message and not at the end, wait for more data
+          if (nextMsgStart === Infinity && !isEnd) {
+            break;
+          }
+          
+          const processed = processor(content, isEnd);
+          
+          // Update the buffer if processed or at end
+          if (processed) {
+            rawBuffer = nextMsgStart !== Infinity 
+              ? rawBuffer.substring(nextMsgStart)
+              : '';
+          } else if (!isEnd) {
+            // If not processed and not at end, wait for more data
+            break;
+          } else {
+            // At end but failed to process, still remove from buffer
+            rawBuffer = nextMsgStart !== Infinity 
+              ? rawBuffer.substring(nextMsgStart)
+              : '';
+          }
+        }
+      };
+      
+
+      const processBufferedData = (isEnd = false) => {
+        // NOTE processMessage should always be processed first Abeg
+        processMessages(MESSAGE_TYPES.TOOL, processToolMessage, isEnd);
+        
+        processMessages(MESSAGE_TYPES.TOLY, processTolyMessage, isEnd);
+      };
+      
 
       this.httpService
         .axiosRef({
           method: 'POST',
           url: `${AiBaseUrl}/agent`,
-          data: {
-            question,
-            thread_id: thread_id,
-          },
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          data: { question, thread_id },
+          headers: { 'Content-Type': 'application/json' },
           responseType: 'stream',
         })
         .then((response) => {
+
           response.data.on('data', (chunk: Buffer) => {
             try {
-              // console.log("Chunk", chunk);
-              
               const text = chunk.toString('utf-8');
-              const lines = text.split('\n');
-              console.log(lines);
-              
-
-              for (const line of lines) {
-                // Handle tool data
-                if (line.startsWith('Tool :')) {
-                  try {
-                    const jsonStr = line.substring(6).trim();
-                    const toolData = JSON.parse(jsonStr);
-                    // Send tool data as SSE format
-                    // console.log(toolData);
-
-                    subscriber.next(
-                      `data: ${JSON.stringify({
-                        type: 'tool',
-                        payload: toolData,
-                      })}\n\n`,
-                    );
-                  } catch (error) {
-                    console.log('Tool parsing error:', error);
-                  }
-                }
-                // Handle chat content
-                else if (line.startsWith('Toly :')) {
-                  try {
-                    const jsonStr = line.substring(6).trim();
-                    const {
-                      event,
-                      data,
-                      metadata: { langgraph_node },
-                    } = JSON.parse(jsonStr);
-
-                    if (event === 'on_chat_model_stream' && langgraph_node) {
-                      const content = data.chunk?.content;
-                      if (content) {
-                        streamdContent += content
-                        // console.log("Content",content);
-                        // Stream chat content in original format
-                        subscriber.next(`data: ${content}\n\n`);
-                      }
-                    }
-                  } catch (error) {
-                    console.log('Event parsing error:', error);
-                  }
-                }
-              }
+              this.logger.debug(`Raw chunk: ${text}`);
+              rawBuffer += text;
+              processBufferedData();
             } catch (error) {
-              console.error('Stream processing error:', error);
+              this.logger.error('Stream processing error:', error);
             }
           });
-
+  
           response.data.on('end', () => {
-            // console.log('Complete response:', streamdContent);
-            this.logger.log("Complete content", streamdContent)
-
+            // Process any remaining data from incomplete chunks
+            processBufferedData(true);
+            
+            this.logger.log("Complete content", streamedContent);
+            
             subscriber.next({
               type: 'content',
               payload: null,
-              completeContent: streamdContent
+              completeContent: streamedContent
             });
-
+            
             subscriber.complete();
           });
-
+  
           response.data.on('error', (error) => {
-            // console.log('Complete response:', streamdContent);
+            this.logger.error('Stream error:', error);
             subscriber.error(error);
           });
         })
         .catch((error) => {
-          console.error('Request error:', error);
+          this.logger.error('Request error:', error);
           subscriber.error(error);
         });
-
-      // Return cleanup function
+  
       return () => {
         console.log('Cleaning up stream subscription');
       };
     });
   }
+  
 
   getMockStreamingResponse(question: string): Observable<string> {
     const mockResponses = {
