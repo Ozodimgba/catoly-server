@@ -143,68 +143,70 @@ export class ChatController {
   }
 
   @Post('stream')
-  async streamResponse(
-    @Body('question') question: string,
-    @Query('conversationId') conversation: string,
-    @Query('threadId') threadId: string,
-    @Res() response: ExpressResponse,
-    @Req() request: Request,
-  ): Promise<any> {
-    response.setHeader('Content-Type', 'text/event-stream');
-    response.setHeader('Cache-Control', 'no-cache');
-    response.setHeader('Connection', 'keep-alive');
-    let AIResponse = "";
+async streamResponse(
+  @Body('question') question: string,
+  @Query('conversationId') conversation: string,
+  @Query('threadId') threadId: string,
+  @Res() response: ExpressResponse,
+  @Req() request: Request,
+): Promise<any> {
+  response.setHeader('Content-Type', 'text/event-stream');
+  response.setHeader('Cache-Control', 'no-cache');
+  response.setHeader('Connection', 'keep-alive');
+  let AIResponse = "";
 
-    const user = request['user'];
+  const user = request['user'];
 
-    let newConversation: Conversation;
-    let newThreadId: number = Number(threadId);
-    let newConversationId: string = conversation;
+  let newConversation: Conversation;
+  let newThreadId: number = Number(threadId);
+  let newConversationId: string = conversation;
 
-    if (!conversation) {
-      newConversation = await this.chatService.createConversation(user.id);
-      newThreadId = newConversation.threadId;
-      newConversationId = newConversation['_id'];
-    }
-
-    const chatPayload: AddMessageProps = {
-      content: question,
-      role: 'user',
-      conversation: newConversationId,
-      userId: user.id,
-    };
-
-    await this.chatService.addMessage(chatPayload);
-
-    this.chatService.getStreamingAIResponse(question, newThreadId).subscribe({
-      next: (chunk) => {
-        if (typeof chunk == 'string') {
-          response.write(chunk);
-        } else {
-          AIResponse += chunk.completeContent
-        }
-      },
-      error: (error) => {
-        response.end();
-      },
-      complete: async () => {
-        if (AIResponse) {
-          this.logger.log('This is the saved response', AIResponse)
-          response.end(async () => {
-            await this.chatService.addMessage({
-              content: AIResponse,
-              role: 'assistant',
-              conversation: newConversationId,
-              userId: user.id,
-            });
-          });
-        } else {
-          // Alert the failure of the  Model
-          console.warn("Content didn't return content");
-        }
-      },
-    });
+  if (!conversation) {
+    newConversation = await this.chatService.createConversation(user.id);
+    newThreadId = newConversation.threadId;
+    newConversationId = newConversation['_id'];
   }
+
+  const chatPayload: AddMessageProps = {
+    content: question,
+    role: 'user',
+    conversation: newConversationId,
+    userId: user.id,
+  };
+
+  await this.chatService.addMessage(chatPayload);
+
+  this.chatService.getStreamingAIResponse(question, newThreadId).subscribe({
+    next: (chunk) => {
+      if (typeof chunk === 'string') {
+        // Collect raw stream data for debugging
+        response.write(chunk);
+      } else {
+        AIResponse += chunk.completeContent || "";
+      }
+    },
+    error: (error) => {
+      this.logger.error('Streaming error:', error);
+      response.end();
+    },
+    complete: async () => {
+      
+      if (AIResponse) {
+        this.logger.log('This is the saved response', AIResponse);
+        response.end(async () => {
+          await this.chatService.addMessage({
+            content: AIResponse,
+            role: 'assistant',
+            conversation: newConversationId,
+            userId: user.id,
+          });
+        });
+      } else {
+        this.logger.warn("Content didn't return content");
+      }
+    },
+  });
+}
 
   @Post('mock-stream')
   async mockStreamResponse(
