@@ -392,7 +392,12 @@ export class ChatService {
             
             if (msgContent) {
               streamedContent += msgContent;
-              subscriber.next(`data: ${msgContent}\n\n`);
+              const base64Content = Buffer.from(msgContent).toString('base64');
+              subscriber.next(`data: ${JSON.stringify({
+                type: 'content',
+                encoding: 'base64',
+                payload: base64Content
+              })}\n\n`);
             }
           }
           return true;
