@@ -49,6 +49,7 @@ import {
   SearchResponse,
   Token,
   GetAssetsParams,
+  TokenMetadata,
 } from './das.types';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { getAllTld, TldParser } from '@onsol/tldparser';
@@ -57,10 +58,19 @@ import { getInternalAssetAccountDataSerializer } from '@nifty-oss/asset';
 import { resolve } from '@bonfida/spl-name-service';
 import axios from 'axios';
 import { VaultService } from 'src/vault/vault.service';
+import {
+  fetchDigitalAsset,
+  fetchJsonMetadata,
+  findMetadataPda,
+  TokenStandard,
+} from '@metaplex-foundation/mpl-token-metadata';
+import { Umi, publicKey } from '@metaplex-foundation/umi';
+import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 
 @Injectable()
 export class DasService {
   private readonly heliusMainnetUrl: string;
+  private readonly umi: Umi;
   private readonly heliusDevnetUrl: string;
   private readonly connection: Connection;
   private readonly NETWORK_URLS = {
@@ -71,6 +81,7 @@ export class DasService {
   private readonly VOTE_PROGRAM_ID = new PublicKey(
     'Vote111111111111111111111111111111111111111',
   );
+  private readonly metadataProgramId: PublicKey;
 
   constructor(
     private configService: ConfigService,
@@ -88,6 +99,8 @@ export class DasService {
     this.NETWORK_URLS.devnet = this.heliusDevnetUrl;
 
     this.connection = new Connection(this.heliusMainnetUrl);
+
+    this.umi = createUmi(this.heliusMainnetUrl);
   }
 
   private async getRpcUrl(
@@ -111,6 +124,70 @@ export class DasService {
     console.log('Detected network:', detectedNetwork);
 
     return this.NETWORK_URLS[detectedNetwork];
+  }
+
+  private serializeMetadata(metadata: any): any {
+    return JSON.parse(
+      JSON.stringify(metadata, (key, value) => {
+        // Convert BigInt to string
+        if (typeof value === 'bigint') {
+          return value.toString();
+        }
+        // Handle other non-serializable types if needed
+        return value;
+      }),
+    );
+  }
+
+  /**
+   * Get metadata for an SPL token
+   * @param mintAddress The token mint address
+   * @returns On-chain and off-chain metadata
+   */
+  async getTokenMetadata(mintAddress: string) {
+    try {
+      const umiPublicKey = publicKey(mintAddress);
+
+      // Get metadata account address
+      const digitalAsset = await fetchDigitalAsset(this.umi, umiPublicKey);
+
+      // Extract and transform the needed fields
+      const response: TokenMetadata = {
+        mintAddress: mintAddress,
+        metadataAddress: findMetadataPda(this.umi, { mint: umiPublicKey })[0],
+        name: digitalAsset.metadata.name,
+        symbol: digitalAsset.metadata.symbol,
+        uri: digitalAsset.metadata.uri,
+        sellerFeeBasisPoints: digitalAsset.metadata.sellerFeeBasisPoints,
+        primarySaleHappened: digitalAsset.metadata.primarySaleHappened,
+        isMutable: digitalAsset.metadata.isMutable,
+        decimals: digitalAsset.mint.decimals,
+        supply: digitalAsset.mint.supply.toString(),
+      };
+
+      // Fetch the JSON metadata from the URI to get the image URL
+      if (digitalAsset.metadata.uri) {
+        try {
+          const jsonMetadata = await fetchJsonMetadata(
+            this.umi,
+            digitalAsset.metadata.uri,
+          );
+          if (jsonMetadata && jsonMetadata.image) {
+            response.image = jsonMetadata.image;
+          }
+        } catch (jsonError) {
+          console.log(
+            `Warning: Couldn't fetch JSON metadata: ${jsonError.message}`,
+          );
+          // Continue without the image URL
+        }
+      }
+
+      return response;
+    } catch (error) {
+      console.log(`Error getting token metadata: ${error.message}`);
+      throw new Error(`Failed to get token metadata: ${error.message}`);
+    }
   }
 
   private async detectNetwork(address: string): Promise<'mainnet' | 'devnet'> {
@@ -610,18 +687,21 @@ export class DasService {
     }
   }
 
-  async getCompleteWalletBalance(params: GetCompleteBalanceParams): Promise<{
-    nativeBalance: FormattedNativeBalance;
-    tokenPortfolio: PortfolioValue;
-    totalValueUsd: number;
-  } | { success: boolean; publicKey?: string; error?: string }> {
+  async getCompleteWalletBalance(params: GetCompleteBalanceParams): Promise<
+    | {
+        nativeBalance: FormattedNativeBalance;
+        tokenPortfolio: PortfolioValue;
+        totalValueUsd: number;
+      }
+    | { success: boolean; publicKey?: string; error?: string }
+  > {
     try {
       const inAppWallet = await this.vaultService.getWalletPublicKey(
         params.ownerAddress,
       );
 
       if (!inAppWallet.success) {
-        return inAppWallet
+        return inAppWallet;
       }
       const [nativeBalance, tokenPortfolio] = await Promise.all([
         this.getNativeBalance({

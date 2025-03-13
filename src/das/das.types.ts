@@ -449,6 +449,20 @@ export interface GetAssetsParams {
   network?: 'mainnet' | 'devnet';
 }
 
+export interface TokenMetadata {
+  mintAddress: string;
+  metadataAddress: string;
+  name: string;
+  symbol: string;
+  uri: string;
+  image?: string;
+  sellerFeeBasisPoints: number;
+  primarySaleHappened: boolean;
+  isMutable: boolean;
+  decimals: number;
+  supply: string;
+}
+
 // Define types for the response
 // export interface HeliusResponse {
 //   jsonrpc: string;

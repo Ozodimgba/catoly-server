@@ -21,7 +21,12 @@ async function bootstrap() {
       origin: [
         'http://localhost:3000',
         'https://toly-lemon.vercel.app',
+<<<<<<< Updated upstream
         'https://3000-mctursh-toly-fvhlbgfqn7g.ws-eu117.gitpod.io',
+=======
+        'https://toly-two.vercel.app',
+        'https://3000-mctursh-toly-rc2gkxribhv.ws-eu118.gitpod.io',
+>>>>>>> Stashed changes
         'https://www.catoly.ai',
         'https://toly.up.railway.app',
       ],

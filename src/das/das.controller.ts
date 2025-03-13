@@ -2,6 +2,8 @@ import {
   Controller,
   DefaultValuePipe,
   Get,
+  HttpException,
+  HttpStatus,
   Param,
   ParseBoolPipe,
   ParseIntPipe,
@@ -54,6 +56,30 @@ export class DasController {
     @Query('network') network?: 'mainnet' | 'devnet',
   ): Promise<TPSResponse> {
     return this.dasService.getTPS({ network });
+  }
+
+  @Get('mintMetadata/:mintAddress')
+  async getMetadataAddress(@Param('mintAddress') mintAddress: string) {
+    try {
+      const metadataAddress =
+        await this.dasService.getTokenMetadata(mintAddress);
+
+      return metadataAddress;
+    } catch (error) {
+      console.log(`Error getting metadata address: ${error.message}`);
+
+      if (error.message.includes('Invalid public key')) {
+        throw new HttpException(
+          `Invalid mint address: ${mintAddress}`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      throw new HttpException(
+        `Failed to get metadata address: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('token-balance')
@@ -120,16 +146,16 @@ export class DasController {
   @UseGuards(AuthGuard)
   async getNativeBalance(
     // @Param('address') ownerAddress: string,
-     @Req() request: Request,
+    @Req() request: Request,
     @Query('network') network?: 'mainnet' | 'devnet',
   ): Promise<FormattedNativeBalance> {
     const user = request['user'];
     return this.dasService.getNativeBalance({
       ownerAddress: user.address,
-      network
+      network,
     });
   }
-  
+
   @Get('portfolio')
   @UseGuards(AuthGuard)
   async getCompleteBalance(
@@ -140,7 +166,7 @@ export class DasController {
     const user = request['user'];
     return this.dasService.getCompleteWalletBalance({
       ownerAddress: user.address,
-      network
+      network,
     });
   }
 

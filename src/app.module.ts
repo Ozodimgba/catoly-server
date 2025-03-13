@@ -15,6 +15,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { UserModule } from './user/user.module';
 import { BackupModule } from './backup/backup.module';
 import { RedisModule } from './redis/redis.module';
+import { DlmmModule } from './dlmm/dlmm.module';
 
 
 @Module({
@@ -45,7 +46,8 @@ import { RedisModule } from './redis/redis.module';
     AdminModule,
     ChatModule,
     UserModule,
-    BackupModule
+    BackupModule,
+    DlmmModule
   ],
   controllers: [AppController],
   providers: [AppService],
